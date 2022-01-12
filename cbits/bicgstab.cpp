@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/IterativeLinearSolvers>
+#include <iostream>
 #include <unsupported/Eigen/IterativeSolvers>
 
 namespace {
@@ -100,6 +101,7 @@ struct generic_product_impl<CustomMatrix<Scalar>, Rhs, SparseShape, DenseShape,
     // This method should implement "dst += alpha * lhs * rhs" inplace
     auto x = vector_as_tensor(rhs.data(), rhs.size(), rhs.stride());
     auto y = vector_as_tensor(dst.data(), dst.size(), dst.stride());
+    std::cerr << "Calling matrix ...\n";
     auto const status = (*lhs._settings->matrix)(&x.tensor, &y.tensor);
     if (status != 0) {
       throw std::runtime_error{"shoooot!"};
@@ -114,18 +116,24 @@ struct generic_product_impl<CustomMatrix<Scalar>, Rhs, SparseShape, DenseShape,
 
 namespace {
 template <typename Scalar> int solve(bicgstab_hs_parameters const *settings) {
-  CustomMatrix<Scalar> solver(*settings);
+  CustomMatrix<Scalar> matrix(*settings);
   Eigen::BiCGSTAB<CustomMatrix<Scalar>, Eigen::IdentityPreconditioner> bicg;
+  std::cerr << "Calling bicg.compute ...\n";
+  bicg.compute(matrix);
   bicg.setMaxIterations(settings->max_iters);
   bicg.setTolerance(static_cast<Scalar>(settings->tol));
   auto b = tensor_as_vector<Scalar>(*settings->b);
-  auto x = tensor_as_vector<Scalar>(*settings->b);
+  auto x = tensor_as_vector<Scalar>(*settings->x);
+  std::cerr << "b = " << b << '\n';
   if (settings->x0 != nullptr) {
     auto x0 = tensor_as_vector<Scalar>(*settings->x0);
     x.noalias() = bicg.solveWithGuess(b, x0);
   } else {
+    std::cerr << "Calling bicg.solve ...\n";
     x.noalias() = bicg.solve(b);
+    std::cerr << "Obtained: " << x << '\n';
   }
+  std::cerr << "A * x = " << (matrix * x) << '\n';
   return 0;
 }
 
